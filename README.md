@@ -12,21 +12,23 @@ A standalone relay server for [DClone](https://github.com/DriftingNarwhal/DClone
 
 ### Step-by-step setup
 
-**Step 1 — Click the Deploy button** above (or go to [railway.app](https://railway.app) → New Project → Deploy from GitHub repo → select this repo).
+**Step 1 — Generate your keypair first.** Before deploying, open the DClone app and click **Generate Relay Setup**. From the downloaded ZIP, open `keypair.env` and copy the value after `RELAY_KEYPAIR=`. You'll need this in the next step.
 
-**Step 2 — Railway detects the Dockerfile** and starts building automatically. The build takes a few minutes on first run.
+**Step 2 — Click the Deploy button** above (or go to [railway.app](https://railway.app) → New Project → Deploy from GitHub repo → select this repo).
 
-**Step 3 — Set your keypair variable.** Once the build finishes, go to your service → **Variables** tab and add:
+**Step 3 — Set your keypair variable before the service starts.** During the initial setup Railway will prompt you to configure variables. Add:
 
 | Key | Value |
 |-----|-------|
-| `RELAY_KEYPAIR` | The base64 value from your `keypair.env` file |
+| `RELAY_KEYPAIR` | The base64 value copied in Step 1 |
 
-This value comes from the **Generate Relay Setup** button inside the DClone app. Open the downloaded ZIP, find `keypair.env`, and copy the value that appears after `RELAY_KEYPAIR=`.
+> **Important:** `RELAY_KEYPAIR` must be set before the service starts. If the container launches without it the process will exit immediately after the health check passes. If you missed this, add the variable in your service → **Variables** tab and click **Redeploy**.
 
-**Step 4 — Expose port 4001 as a TCP service.** Railway will redeploy automatically after you add the variable. Once the health check passes, go to **Settings → Networking** and add a **TCP Proxy** on port `4001` to get a public hostname and port for libp2p traffic.
+**Step 4 — Railway builds and starts the service.** The build takes a few minutes on first run. Once the health check at `/health` passes the service is live.
 
-**Step 5 — Add the relay in DClone.** In the DClone app, use **Verify and Add Relay** with the Railway-assigned TCP hostname and port `4001`.
+**Step 5 — Expose port 4001 as a TCP service.** Go to **Settings → Networking** and add a **TCP Proxy** on port `4001` to get a public hostname and port for libp2p traffic.
+
+**Step 6 — Add the relay in DClone.** In the DClone app, use **Verify and Add Relay** with the Railway-assigned TCP hostname and port `4001`.
 
 ---
 
