@@ -1,7 +1,13 @@
 # ── Stage 1: Build ─────────────────────────────────────────────────────────
-FROM rust:1.77-slim-bookworm AS builder
+FROM rust:1-slim-bookworm AS builder
 
 WORKDIR /build
+
+# Install native build dependencies required by crypto crates (ring, aws-lc-rs).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+       build-essential cmake pkg-config libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 # Cache dependencies by copying only manifests first.
 COPY Cargo.toml ./
