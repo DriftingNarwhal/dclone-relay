@@ -73,6 +73,41 @@ async fn main() -> Result<()> {
         )
         .init();
 
+    // ── Spawn health-check HTTP server immediately so Railway can reach /health
+    // even while the swarm is still initialising.
+    let http_port = std::env::var("PORT")
+        .ok()
+        .and_then(|p| p.parse::<u16>().ok())
+        .unwrap_or(4002);
+    let addr = SocketAddr::from(([0, 0, 0, 0], http_port));
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    info!("🌐 Health-check server on http://{}", addr);
+
+    // peer_id is filled in once the keypair is ready; until then the endpoint
+    // returns a placeholder so the healthcheck still gets HTTP 200.
+    let peer_id_cell: std::sync::Arc<std::sync::RwLock<String>> =
+        std::sync::Arc::new(std::sync::RwLock::new("starting".to_string()));
+    let peer_id_cell_http = peer_id_cell.clone();
+
+    let app = Router::new()
+        .route(
+            "/health",
+            get(move || {
+                let cell = peer_id_cell_http.clone();
+                async move {
+                    let pid = cell.read().unwrap().clone();
+                    format!("{{\"peer_id\":\"{}\"}}", pid)
+                }
+            }),
+        )
+        .route("/", get(|| async { "DClone relay server" }));
+
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap_or_else(|e| {
+            warn!("Health-check server error: {}", e);
+        });
+    });
+
     // ── Load keypair ──────────────────────────────────────────────────────────
     let keypair_b64 = std::env::var("RELAY_KEYPAIR")
         .context("RELAY_KEYPAIR environment variable is required")?;
@@ -84,33 +119,10 @@ async fn main() -> Result<()> {
     let local_peer_id = PeerId::from(key.public());
     info!("🆔 Relay PeerID: {}", local_peer_id);
 
+    *peer_id_cell.write().unwrap() = local_peer_id.to_string();
+
     // ── Build swarm ───────────────────────────────────────────────────────────
     let swarm = build_swarm(key, local_peer_id)?;
-    let peer_id_str = local_peer_id.to_string();
-
-    // ── Spawn health-check HTTP server ────────────────────────────────────────
-    let app = Router::new()
-        .route(
-            "/health",
-            get(move || {
-                let pid = peer_id_str.clone();
-                async move { format!("{{\"peer_id\":\"{}\"}}", pid) }
-            }),
-        )
-        .route("/", get(|| async { "DClone relay server" }));
-
-    let http_port = std::env::var("PORT")
-        .ok()
-        .and_then(|p| p.parse::<u16>().ok())
-        .unwrap_or(4002);
-    let addr = SocketAddr::from(([0, 0, 0, 0], http_port));
-    let listener = tokio::net::TcpListener::bind(addr).await?;
-    info!("🌐 Health-check server on http://{}", addr);
-    tokio::spawn(async move {
-        axum::serve(listener, app).await.unwrap_or_else(|e| {
-            warn!("Health-check server error: {}", e);
-        });
-    });
 
     // ── Run swarm ─────────────────────────────────────────────────────────────
     let mut rate_state = RateState::new();
